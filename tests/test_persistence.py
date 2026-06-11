@@ -1,6 +1,5 @@
-"""Tests for tournament JSON save/load operations."""
+"""Tests for saving and loading tournament JSON files."""
 
-import json
 from pathlib import Path
 
 import pytest
@@ -10,7 +9,6 @@ from utils.persistence import save_tournament, load_tournament
 
 
 def test_save_and_load_tournament(tmp_path: Path):
-    """A saved tournament should round-trip through JSON without data loss."""
     tournament = Tournament("Spring Open", "T001")
     tournament.add_player("Alice", 1500)
     tournament.add_player("Bob", 1400)
@@ -26,12 +24,10 @@ def test_save_and_load_tournament(tmp_path: Path):
 
 
 def test_load_missing_file_returns_none(tmp_path: Path):
-    """Loading a non-existent file should return None, not raise."""
     assert load_tournament(tmp_path / "missing.json") is None
 
 
 def test_load_invalid_json_raises(tmp_path: Path):
-    """Corrupt JSON should raise a clear ValueError."""
     bad_file = tmp_path / "bad.json"
     bad_file.write_text("not json", encoding="utf-8")
     with pytest.raises(ValueError):

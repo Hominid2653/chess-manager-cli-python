@@ -1,17 +1,15 @@
-"""Base person model shared by Admin and Player."""
+"""Base class for people in the tournament system."""
 
 
 class Person:
-    """Represents any person in the tournament system (admin or player)."""
+    """Shared name and ID fields for admins and players."""
 
     def __init__(self, name: str, person_id: str):
-        # Display name used across CLI output and standings tables.
         self.name = name
-        # Unique identifier (e.g. P001 for players, A001 for admins).
         self.person_id = person_id
 
     def to_dict(self) -> dict:
-        """Serialize core person fields for JSON persistence."""
+        """Convert person data to a dictionary for JSON storage."""
         return {"name": self.name, "person_id": self.person_id}
 
     def __repr__(self) -> str:

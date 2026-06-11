@@ -1,11 +1,10 @@
-"""Tests for leaderboard sorting by points and rating tiebreak."""
+"""Tests for leaderboard sorting."""
 
 from models.tournament import Tournament
 from utils.standings import get_standings
 
 
 def test_standings_sorted_by_points_then_rating():
-    """Players with equal points should be ordered by higher rating first."""
     tournament = Tournament("Test Open", "T001")
     p1 = tournament.add_player("Alice", 1500)
     p2 = tournament.add_player("Bob", 1600)

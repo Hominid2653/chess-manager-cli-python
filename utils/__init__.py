@@ -1,5 +1,3 @@
-"""Utility modules for persistence, pairing, standings, and authentication."""
-
 from utils.persistence import save_tournament, load_tournament, DEFAULT_DATA_PATH
 from utils.pairing import generate_pairings
 from utils.standings import get_standings

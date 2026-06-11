@@ -1,8 +1,8 @@
-"""Match model linking two players in a specific tournament round."""
+"""Match between two players in a tournament round."""
 
 
 class Match:
-    """A single game between two players, optionally with a recorded result."""
+    """Represents a single game with an optional result."""
 
     def __init__(
         self,
@@ -13,20 +13,18 @@ class Match:
         result: str | None = None,
     ):
         self.match_id = match_id
-        # player1_id is treated as White; player2_id as Black in the CLI.
-        self.player1_id = player1_id
-        self.player2_id = player2_id
+        self.player1_id = player1_id  # White
+        self.player2_id = player2_id  # Black
         self.round_num = round_num
-        # Result is recorded from White's perspective: win, loss, or draw.
-        self.result = result
+        self.result = result  # win, loss, or draw (from White's view)
 
     @property
     def is_complete(self) -> bool:
-        """True when a result has been entered for this match."""
+        """Return True if a result has been recorded."""
         return self.result is not None
 
     def to_dict(self) -> dict:
-        """Serialize match data for tournament JSON persistence."""
+        """Convert match data to a dictionary for JSON storage."""
         return {
             "match_id": self.match_id,
             "player1_id": self.player1_id,
@@ -37,7 +35,7 @@ class Match:
 
     @classmethod
     def from_dict(cls, data: dict) -> "Match":
-        """Rebuild a Match instance from persisted JSON data."""
+        """Create a Match instance from saved JSON data."""
         return cls(
             match_id=data["match_id"],
             player1_id=data["player1_id"],

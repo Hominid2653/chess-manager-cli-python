@@ -21,3 +21,7 @@ python main.py my-points
 python main.py login admin admin admin123
 python main.py create-admin "Jane Doe" jane mypassword123
 python main.py create-admin "Jane Doe" jane mypassword123
+
+
+login / logout / whoami / create-admin — admin & player auth
+view-pairings / my-points — player read-only views

@@ -1,24 +1,21 @@
-"""Tests for Player point updates after match results."""
+"""Tests for player point updates."""
 
 from models.player import Player
 
 
 def test_add_result_win():
-    """A win should award 1.0 point."""
     player = Player("Alice", "P001", rating=1500)
     player.add_result("win")
     assert player.points == 1.0
 
 
 def test_add_result_draw():
-    """A draw should award 0.5 points."""
     player = Player("Bob", "P002", rating=1400)
     player.add_result("draw")
     assert player.points == 0.5
 
 
 def test_add_result_loss():
-    """A loss should not change the point total."""
     player = Player("Carol", "P003", rating=1300)
     player.add_result("loss")
     assert player.points == 0.0

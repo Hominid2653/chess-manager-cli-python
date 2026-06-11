@@ -1,10 +1,10 @@
-"""Competitor model with rating, points, and match-result tracking."""
+"""Tournament player model."""
 
 from models.person import Person
 
 
 class Player(Person):
-    """A registered tournament player who can view pairings, standings, and points."""
+    """A competitor with a rating and tournament score."""
 
     def __init__(self, name: str, player_id: str, rating: int = 1200, points: float = 0.0):
         super().__init__(name, player_id)
@@ -12,15 +12,14 @@ class Player(Person):
         self.points = points
 
     def add_result(self, result: str) -> None:
-        """Update points based on a match outcome (win, loss, or draw)."""
+        """Add points based on match outcome: win=1, draw=0.5, loss=0."""
         if result == "win":
             self.points += 1.0
         elif result == "draw":
             self.points += 0.5
-        # Losses award zero points; no update needed.
 
     def to_dict(self) -> dict:
-        """Serialize player data for tournament JSON persistence."""
+        """Convert player data to a dictionary for JSON storage."""
         return {
             **super().to_dict(),
             "player_id": self.person_id,
@@ -30,7 +29,7 @@ class Player(Person):
 
     @classmethod
     def from_dict(cls, data: dict) -> "Player":
-        """Rebuild a Player instance from persisted JSON data."""
+        """Create a Player instance from saved JSON data."""
         return cls(
             name=data["name"],
             player_id=data.get("player_id", data.get("person_id", "")),

@@ -1,11 +1,11 @@
-"""Tournament container holding players, matches, and round state."""
+"""Tournament model that holds players and matches."""
 
 from models.player import Player
 from models.match import Match
 
 
 class Tournament:
-    """Central data structure for a chess tournament and its lifecycle."""
+    """Manages players, matches, and round state for one tournament."""
 
     def __init__(self, name: str, tournament_id: str):
         self.name = name
@@ -13,12 +13,11 @@ class Tournament:
         self.players: list[Player] = []
         self.matches: list[Match] = []
         self.current_round = 0
-        # Counters ensure unique IDs when adding players and matches.
         self._next_player_num = 1
         self._next_match_num = 1
 
     def add_player(self, name: str, rating: int) -> Player:
-        """Register a new player and return the created Player object."""
+        """Register a new player and assign a unique ID like P001."""
         player_id = f"P{self._next_player_num:03d}"
         self._next_player_num += 1
         player = Player(name=name, player_id=player_id, rating=rating)
@@ -26,14 +25,14 @@ class Tournament:
         return player
 
     def get_player(self, player_id: str) -> Player | None:
-        """Look up a player by their unique ID."""
+        """Find a player by their ID."""
         for player in self.players:
             if player.person_id == player_id:
                 return player
         return None
 
     def has_played(self, player1_id: str, player2_id: str) -> bool:
-        """Return True if these two players already have a recorded matchup."""
+        """Check if two players have already faced each other."""
         pair = {player1_id, player2_id}
         for match in self.matches:
             if {match.player1_id, match.player2_id} == pair:
@@ -41,11 +40,11 @@ class Tournament:
         return False
 
     def get_round_matches(self, round_num: int) -> list[Match]:
-        """Return all matches scheduled for a given round number."""
+        """Get all matches for a specific round."""
         return [m for m in self.matches if m.round_num == round_num]
 
     def add_match(self, player1_id: str, player2_id: str, round_num: int) -> Match:
-        """Create and store a new match between two players."""
+        """Create a new match between two players."""
         match_id = f"M{self._next_match_num:03d}"
         self._next_match_num += 1
         match = Match(match_id, player1_id, player2_id, round_num)
@@ -53,7 +52,7 @@ class Tournament:
         return match
 
     def to_dict(self) -> dict:
-        """Serialize the full tournament state for JSON persistence."""
+        """Convert the full tournament state to a dictionary for JSON storage."""
         return {
             "name": self.name,
             "tournament_id": self.tournament_id,
@@ -66,7 +65,7 @@ class Tournament:
 
     @classmethod
     def from_dict(cls, data: dict) -> "Tournament":
-        """Rebuild a Tournament instance from persisted JSON data."""
+        """Rebuild a tournament from saved JSON data."""
         tournament = cls(name=data["name"], tournament_id=data["tournament_id"])
         tournament.current_round = data.get("current_round", 0)
         tournament._next_player_num = data.get("next_player_num", 1)
