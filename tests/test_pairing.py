@@ -1,8 +1,11 @@
+"""Tests for Swiss-style round pairing generation."""
+
 from models.tournament import Tournament
 from utils.pairing import generate_pairings
 
 
 def test_round_one_pairs_by_rating():
+    """Round 1 should pair the highest-rated players against each other."""
     tournament = Tournament("Test Open", "T001")
     tournament.add_player("Low", 1200)
     tournament.add_player("High", 1800)
@@ -19,6 +22,7 @@ def test_round_one_pairs_by_rating():
 
 
 def test_subsequent_round_pairs_by_points():
+    """Later rounds should pair by points after round 1 results are recorded."""
     tournament = Tournament("Test Open", "T001")
     p1 = tournament.add_player("Alice", 1600)
     p2 = tournament.add_player("Bob", 1500)

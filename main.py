@@ -1,3 +1,10 @@
+"""
+Chess Tournament Manager CLI.
+
+Admins manage the full tournament lifecycle (create, pair, record results).
+Players can log in to view pairings, standings, and their own points.
+"""
+
 import argparse
 import sys
 from pathlib import Path
@@ -9,13 +16,28 @@ from models.tournament import Tournament
 from utils.persistence import save_tournament, load_tournament, DEFAULT_DATA_PATH
 from utils.pairing import generate_pairings
 from utils.standings import get_standings
+from utils.auth import (
+    login_admin,
+    login_player,
+    clear_session,
+    get_session,
+    is_admin,
+    is_player,
+    create_admin,
+    ensure_default_admin,
+    get_logged_in_player_id,
+    DEFAULT_ADMIN_USERNAME,
+    DEFAULT_ADMIN_PASSWORD,
+)
 
 console = Console()
 
+# In-memory tournament cache; persisted to JSON between CLI invocations.
 _tournament: Tournament | None = None
 
 
 def _try_auto_load() -> None:
+    """Load the tournament from the default JSON path when not already in memory."""
     global _tournament
     if _tournament is None:
         loaded = load_tournament()
@@ -24,11 +46,13 @@ def _try_auto_load() -> None:
 
 
 def _auto_save() -> None:
+    """Persist the active tournament after any mutating admin action."""
     if _tournament is not None:
         save_tournament(_tournament)
 
 
 def get_active_tournament() -> Tournament:
+    """Return the loaded tournament or exit with an error message."""
     global _tournament
     if _tournament is None:
         console.print("[red]No active tournament. Use create-tournament or load first.[/red]")
@@ -36,7 +60,106 @@ def get_active_tournament() -> Tournament:
     return _tournament
 
 
+def require_admin() -> None:
+    """Exit unless the current session is an authenticated admin."""
+    if not is_admin():
+        console.print("[red]Admin login required. Use: login admin <username> <password>[/red]")
+        sys.exit(1)
+
+
+def require_player() -> None:
+    """Exit unless the current session is an authenticated player."""
+    if not is_player():
+        console.print("[red]Player login required. Use: login player <player_id>[/red]")
+        sys.exit(1)
+
+
+def require_admin_or_player() -> None:
+    """Exit unless logged in as admin or player (for read-only views)."""
+    if not is_admin() and not is_player():
+        console.print("[red]Login required. Use login admin or login player.[/red]")
+        sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
+# Authentication commands
+# ---------------------------------------------------------------------------
+
+def cmd_login(args: argparse.Namespace) -> None:
+    """Handle admin or player login based on the role sub-argument."""
+    role = args.role.lower()
+
+    if role == "admin":
+        try:
+            admin = login_admin(args.username, args.password)
+        except ValueError as exc:
+            console.print(f"[red]{exc}[/red]")
+            sys.exit(1)
+        console.print(f"[green]Admin '{admin.name}' logged in successfully.[/green]")
+        return
+
+    if role == "player":
+        tournament = get_active_tournament()
+        try:
+            login_player(args.player_id, tournament)
+        except ValueError as exc:
+            console.print(f"[red]{exc}[/red]")
+            sys.exit(1)
+        player = tournament.get_player(args.player_id)
+        console.print(f"[green]Player '{player.name}' ({args.player_id}) logged in.[/green]")
+        return
+
+    console.print("[red]Role must be 'admin' or 'player'.[/red]")
+    sys.exit(1)
+
+
+def cmd_logout(args: argparse.Namespace) -> None:
+    """End the current session."""
+    session = get_session()
+    if session is None:
+        console.print("[yellow]No active session.[/yellow]")
+        return
+    name = session.get("name", "User")
+    clear_session()
+    console.print(f"[green]{name} logged out.[/green]")
+
+
+def cmd_whoami(args: argparse.Namespace) -> None:
+    """Display the currently logged-in user and role."""
+    session = get_session()
+    if session is None:
+        console.print("[yellow]Not logged in.[/yellow]")
+        return
+
+    role = session["role"].capitalize()
+    name = session.get("name", "Unknown")
+    if session["role"] == "player":
+        console.print(f"[cyan]{role}:[/cyan] {name} (ID: {session.get('player_id')})")
+    else:
+        console.print(f"[cyan]{role}:[/cyan] {name} (@{session.get('username')})")
+
+
+def cmd_create_admin(args: argparse.Namespace) -> None:
+    """Register a new admin account (requires an existing admin session)."""
+    require_admin()
+    try:
+        admin = create_admin(args.name, args.username, args.password)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        sys.exit(1)
+    console.print(
+        f"[green]Admin '{admin.name}' created "
+        f"(username: {admin.username}, ID: {admin.person_id}).[/green]"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Admin-only tournament management commands
+# ---------------------------------------------------------------------------
+
 def cmd_create_tournament(args: argparse.Namespace) -> None:
+    """Create a new tournament (admin only)."""
+    require_admin()
     global _tournament
     _tournament = Tournament(name=args.name, tournament_id=args.id)
     _auto_save()
@@ -44,6 +167,8 @@ def cmd_create_tournament(args: argparse.Namespace) -> None:
 
 
 def cmd_add_player(args: argparse.Namespace) -> None:
+    """Register a new player in the active tournament (admin only)."""
+    require_admin()
     tournament = get_active_tournament()
     player = tournament.add_player(args.name, args.rating)
     _auto_save()
@@ -54,6 +179,8 @@ def cmd_add_player(args: argparse.Namespace) -> None:
 
 
 def cmd_list_players(args: argparse.Namespace) -> None:
+    """List all registered players (admin only)."""
+    require_admin()
     tournament = get_active_tournament()
     if not tournament.players:
         console.print("[yellow]No players registered yet.[/yellow]")
@@ -72,6 +199,8 @@ def cmd_list_players(args: argparse.Namespace) -> None:
 
 
 def cmd_pair_round(args: argparse.Namespace) -> None:
+    """Generate pairings for the next round (admin only)."""
+    require_admin()
     tournament = get_active_tournament()
     try:
         matches = generate_pairings(tournament)
@@ -83,25 +212,13 @@ def cmd_pair_round(args: argparse.Namespace) -> None:
         console.print("[yellow]No pairings could be generated.[/yellow]")
         return
 
-    table = Table(title=f"Round {tournament.current_round} Pairings")
-    table.add_column("Match ID", style="cyan")
-    table.add_column("White")
-    table.add_column("Black")
-
-    for match in matches:
-        p1 = tournament.get_player(match.player1_id)
-        p2 = tournament.get_player(match.player2_id)
-        table.add_row(
-            match.match_id,
-            f"{p1.name} ({p1.person_id})" if p1 else match.player1_id,
-            f"{p2.name} ({p2.person_id})" if p2 else match.player2_id,
-        )
-
-    console.print(table)
+    _print_pairings_table(tournament, tournament.current_round)
     _auto_save()
 
 
 def cmd_enter_result(args: argparse.Namespace) -> None:
+    """Record a match result from White's perspective (admin only)."""
+    require_admin()
     tournament = get_active_tournament()
     match = next((m for m in tournament.matches if m.match_id == args.match_id), None)
     if match is None:
@@ -140,7 +257,80 @@ def cmd_enter_result(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_save(args: argparse.Namespace) -> None:
+    """Manually save the tournament to a JSON file (admin only)."""
+    require_admin()
+    tournament = get_active_tournament()
+    path = Path(args.file) if args.file else DEFAULT_DATA_PATH
+    save_tournament(tournament, path)
+    console.print(f"[green]Tournament saved to {path}.[/green]")
+
+
+def cmd_load(args: argparse.Namespace) -> None:
+    """Load a tournament from a JSON file (admin only)."""
+    require_admin()
+    global _tournament
+    path = Path(args.file) if args.file else DEFAULT_DATA_PATH
+    try:
+        loaded = load_tournament(path)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        sys.exit(1)
+
+    if loaded is None:
+        console.print(f"[red]No tournament file found at {path}.[/red]")
+        sys.exit(1)
+
+    _tournament = loaded
+    console.print(f"[green]Tournament '{loaded.name}' loaded from {path}.[/green]")
+
+
+# ---------------------------------------------------------------------------
+# Player (and admin) read-only commands
+# ---------------------------------------------------------------------------
+
+def _print_pairings_table(tournament: Tournament, round_num: int) -> None:
+    """Render a rich table of pairings for the given round."""
+    matches = tournament.get_round_matches(round_num)
+    if not matches:
+        console.print(f"[yellow]No pairings for round {round_num}.[/yellow]")
+        return
+
+    table = Table(title=f"Round {round_num} Pairings")
+    table.add_column("Match ID", style="cyan")
+    table.add_column("White")
+    table.add_column("Black")
+    table.add_column("Result")
+
+    for match in matches:
+        p1 = tournament.get_player(match.player1_id)
+        p2 = tournament.get_player(match.player2_id)
+        table.add_row(
+            match.match_id,
+            f"{p1.name} ({p1.person_id})" if p1 else match.player1_id,
+            f"{p2.name} ({p2.person_id})" if p2 else match.player2_id,
+            match.result or "pending",
+        )
+
+    console.print(table)
+
+
+def cmd_view_pairings(args: argparse.Namespace) -> None:
+    """View round pairings (player or admin)."""
+    require_admin_or_player()
+    tournament = get_active_tournament()
+    round_num = args.round if args.round else tournament.current_round
+
+    if round_num < 1:
+        console.print("[yellow]No rounds have been paired yet.[/yellow]")
+        return
+
+    _print_pairings_table(tournament, round_num)
+
+
 def cmd_standings(args: argparse.Namespace) -> None:
+    """View the tournament leaderboard (player or admin)."""
+    require_admin_or_player()
     tournament = get_active_tournament()
     standings = get_standings(tournament)
 
@@ -163,36 +353,58 @@ def cmd_standings(args: argparse.Namespace) -> None:
     console.print(table)
 
 
-def cmd_save(args: argparse.Namespace) -> None:
+def cmd_my_points(args: argparse.Namespace) -> None:
+    """View the logged-in player's current points and rank (player only)."""
+    require_player()
     tournament = get_active_tournament()
-    path = Path(args.file) if args.file else DEFAULT_DATA_PATH
-    save_tournament(tournament, path)
-    console.print(f"[green]Tournament saved to {path}.[/green]")
+    player_id = get_logged_in_player_id()
+    player = tournament.get_player(player_id)
 
-
-def cmd_load(args: argparse.Namespace) -> None:
-    global _tournament
-    path = Path(args.file) if args.file else DEFAULT_DATA_PATH
-    try:
-        loaded = load_tournament(path)
-    except ValueError as exc:
-        console.print(f"[red]{exc}[/red]")
+    if player is None:
+        console.print("[red]Your player record was not found in this tournament.[/red]")
         sys.exit(1)
 
-    if loaded is None:
-        console.print(f"[red]No tournament file found at {path}.[/red]")
-        sys.exit(1)
+    standings = get_standings(tournament)
+    rank = next(
+        (i for i, p in enumerate(standings, start=1) if p.person_id == player_id),
+        None,
+    )
 
-    _tournament = loaded
-    console.print(f"[green]Tournament '{loaded.name}' loaded from {path}.[/green]")
+    console.print(f"[bold]Player:[/bold] {player.name} ({player.person_id})")
+    console.print(f"[bold]Rating:[/bold] {player.rating}")
+    console.print(f"[bold]Points:[/bold] {player.points:.1f}")
+    if rank is not None:
+        console.print(f"[bold]Rank:[/bold] {rank} of {len(standings)}")
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Construct the argparse CLI with admin, player, and auth subcommands."""
     parser = argparse.ArgumentParser(
         description="Chess Tournament Manager CLI",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    # --- Authentication ---
+    login_parser = subparsers.add_parser("login", help="Log in as admin or player")
+    login_parser.add_argument("role", choices=["admin", "player"], help="Login role")
+    login_parser.add_argument("username", nargs="?", help="Admin username (admin login)")
+    login_parser.add_argument("password", nargs="?", help="Admin password (admin login)")
+    login_parser.add_argument("--player-id", "-p", dest="player_id", help="Player ID (player login)")
+    login_parser.set_defaults(func=cmd_login)
+
+    logout_parser = subparsers.add_parser("logout", help="Log out of the current session")
+    logout_parser.set_defaults(func=cmd_logout)
+
+    whoami_parser = subparsers.add_parser("whoami", help="Show the current logged-in user")
+    whoami_parser.set_defaults(func=cmd_whoami)
+
+    create_admin_parser = subparsers.add_parser("create-admin", help="Create a new admin account")
+    create_admin_parser.add_argument("name", help="Admin display name")
+    create_admin_parser.add_argument("username", help="Login username")
+    create_admin_parser.add_argument("password", help="Login password")
+    create_admin_parser.set_defaults(func=cmd_create_admin)
+
+    # --- Admin tournament management ---
     create_parser = subparsers.add_parser("create-tournament", help="Create a new tournament")
     create_parser.add_argument("name", help="Tournament name")
     create_parser.add_argument("id", help="Tournament ID")
@@ -217,9 +429,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     result_parser.set_defaults(func=cmd_enter_result)
 
-    standings_parser = subparsers.add_parser("standings", help="Show tournament standings")
-    standings_parser.set_defaults(func=cmd_standings)
-
     save_parser = subparsers.add_parser("save", help="Save tournament to JSON")
     save_parser.add_argument("--file", "-f", help="Output file path")
     save_parser.set_defaults(func=cmd_save)
@@ -228,14 +437,49 @@ def build_parser() -> argparse.ArgumentParser:
     load_parser.add_argument("--file", "-f", help="Input file path")
     load_parser.set_defaults(func=cmd_load)
 
+    # --- Player read-only views ---
+    pairings_parser = subparsers.add_parser("view-pairings", help="View round pairings")
+    pairings_parser.add_argument("--round", "-r", type=int, help="Round number (default: current)")
+    pairings_parser.set_defaults(func=cmd_view_pairings)
+
+    standings_parser = subparsers.add_parser("standings", help="Show tournament standings")
+    standings_parser.set_defaults(func=cmd_standings)
+
+    points_parser = subparsers.add_parser("my-points", help="View your points and rank")
+    points_parser.set_defaults(func=cmd_my_points)
+
     return parser
 
 
 def main() -> None:
+    """CLI entry point: parse args, auto-load tournament, dispatch command."""
+    # Bootstrap default admin on first run so login is always possible.
+    ensure_default_admin()
+
     parser = build_parser()
     args = parser.parse_args()
+
+    # Fix player login: role=player uses --player-id, not positional username/password.
+    if args.command == "login" and args.role == "player":
+        if not args.player_id:
+            # Allow `login player P001` as a convenience positional form.
+            if args.username and not args.password:
+                args.player_id = args.username
+            else:
+                console.print("[red]Player login requires a player ID: login player P001[/red]")
+                sys.exit(1)
+
+    if args.command == "login" and args.role == "admin":
+        if not args.username or not args.password:
+            console.print(
+                f"[red]Admin login requires username and password.[/red]\n"
+                f"[dim]Default: {DEFAULT_ADMIN_USERNAME} / {DEFAULT_ADMIN_PASSWORD}[/dim]"
+            )
+            sys.exit(1)
+
     if args.command != "create-tournament":
         _try_auto_load()
+
     args.func(args)
 
 
