@@ -9,7 +9,7 @@ from models.admin import Admin
 ADMINS_PATH = Path(__file__).resolve().parent.parent / "data" / "admins.json"
 SESSION_PATH = Path(__file__).resolve().parent.parent / "data" / "session.json"
 
-# Default bootstrap credentials created when no admin accounts exist yet.
+# Default credentials created when no admins exist yet.
 DEFAULT_ADMIN_USERNAME = "admin"
 DEFAULT_ADMIN_PASSWORD = "admin123"
 
