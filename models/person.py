@@ -1,8 +1,8 @@
-"""Base class for people in the tournament system."""
+"""Base class for people in system."""
 
 
 class Person:
-    """Shared name and ID fields for admins and players."""
+    """Shared name and ID for admins and players."""
 
     def __init__(self, name: str, person_id: str):
         self.name = name

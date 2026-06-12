@@ -17,16 +17,6 @@ from utils.auth import (
 )
 
 
-@pytest.fixture(autouse=True)
-def isolate_auth_files(tmp_path: Path, monkeypatch):
-    admins_file = tmp_path / "admins.json"
-    session_file = tmp_path / "session.json"
-    monkeypatch.setattr("utils.auth.ADMINS_PATH", admins_file)
-    monkeypatch.setattr("utils.auth.SESSION_PATH", session_file)
-    yield
-    clear_session()
-
-
 def test_admin_login_and_session():
     create_admin("Chief", "chief", "secret")
     logged_in = login_admin("chief", "secret")

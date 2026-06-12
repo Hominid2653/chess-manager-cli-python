@@ -1,8 +1,8 @@
-"""Match between two players in a tournament round."""
+"""Match between two players in a round."""
 
 
 class Match:
-    """Represents a single game with an optional result."""
+    """Single game with optional result."""
 
     def __init__(
         self,

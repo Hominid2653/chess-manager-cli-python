@@ -1,11 +1,8 @@
-"""CLI entry point for the chess tournament manager."""
+"""CLI entry point"""
 
 import argparse
 import sys
 from pathlib import Path
-
-from rich.console import Console
-from rich.table import Table
 
 from models.tournament import Tournament
 from utils.persistence import save_tournament, load_tournament, DEFAULT_DATA_PATH
@@ -24,8 +21,19 @@ from utils.auth import (
     DEFAULT_ADMIN_USERNAME,
     DEFAULT_ADMIN_PASSWORD,
 )
+from utils.console_theme import (
+    console,
+    print_success,
+    print_info,
+    print_error,
+    print_warning,
+    make_table,
+    id_column_style,
+    role_badge,
+    ADMIN_HEADER,
+    PLAYER_HEADER,
+)
 
-console = Console()
 _tournament: Tournament | None = None
 
 
@@ -48,7 +56,7 @@ def get_active_tournament() -> Tournament:
     """Return the active tournament or exit with an error."""
     global _tournament
     if _tournament is None:
-        console.print("[red]No active tournament. Use create-tournament or load first.[/red]")
+        print_error("No active tournament. Use create-tournament or load first.")
         sys.exit(1)
     return _tournament
 
@@ -56,21 +64,21 @@ def get_active_tournament() -> Tournament:
 def require_admin() -> None:
     """Block the command unless an admin is logged in."""
     if not is_admin():
-        console.print("[red]Admin login required. Use: login admin <username> <password>[/red]")
+        print_error("Admin login required. Use: login admin <username> <password>")
         sys.exit(1)
 
 
 def require_player() -> None:
     """Block the command unless a player is logged in."""
     if not is_player():
-        console.print("[red]Player login required. Use: login player <player_id>[/red]")
+        print_error("Player login required. Use: login player <player_id>")
         sys.exit(1)
 
 
 def require_admin_or_player() -> None:
     """Block the command unless an admin or player is logged in."""
     if not is_admin() and not is_player():
-        console.print("[red]Login required. Use login admin or login player.[/red]")
+        print_error("Login required. Use login admin or login player.")
         sys.exit(1)
 
 
@@ -82,9 +90,9 @@ def cmd_login(args: argparse.Namespace) -> None:
         try:
             admin = login_admin(args.username, args.password)
         except ValueError as exc:
-            console.print(f"[red]{exc}[/red]")
+            print_error(str(exc))
             sys.exit(1)
-        console.print(f"[green]Admin '{admin.name}' logged in successfully.[/green]")
+        print_success(f"{admin.name} logged in successfully.", role="admin")
         return
 
     if role == "player":
@@ -92,13 +100,13 @@ def cmd_login(args: argparse.Namespace) -> None:
         try:
             login_player(args.player_id, tournament)
         except ValueError as exc:
-            console.print(f"[red]{exc}[/red]")
+            print_error(str(exc))
             sys.exit(1)
         player = tournament.get_player(args.player_id)
-        console.print(f"[green]Player '{player.name}' ({args.player_id}) logged in.[/green]")
+        print_success(f"{player.name} ({args.player_id}) logged in.", role="player")
         return
 
-    console.print("[red]Role must be 'admin' or 'player'.[/red]")
+    print_error("Role must be 'admin' or 'player'.")
     sys.exit(1)
 
 
@@ -106,26 +114,33 @@ def cmd_logout(args: argparse.Namespace) -> None:
     """Log out the current user."""
     session = get_session()
     if session is None:
-        console.print("[yellow]No active session.[/yellow]")
+        print_warning("No active session.")
         return
+
+    role = session.get("role")
     name = session.get("name", "User")
     clear_session()
-    console.print(f"[green]{name} logged out.[/green]")
+    print_success(f"{name} logged out.", role=role)
 
 
 def cmd_whoami(args: argparse.Namespace) -> None:
     """Show the currently logged-in user."""
     session = get_session()
     if session is None:
-        console.print("[yellow]Not logged in.[/yellow]")
+        print_warning("Not logged in.")
         return
 
-    role = session["role"].capitalize()
     name = session.get("name", "Unknown")
     if session["role"] == "player":
-        console.print(f"[cyan]{role}:[/cyan] {name} (ID: {session.get('player_id')})")
+        print_info(
+            f"{role_badge('player')}{name} (ID: {session.get('player_id')})",
+            role="player",
+        )
     else:
-        console.print(f"[cyan]{role}:[/cyan] {name} (@{session.get('username')})")
+        print_info(
+            f"{role_badge('admin')}{name} (@{session.get('username')})",
+            role="admin",
+        )
 
 
 def cmd_create_admin(args: argparse.Namespace) -> None:
@@ -134,11 +149,11 @@ def cmd_create_admin(args: argparse.Namespace) -> None:
     try:
         admin = create_admin(args.name, args.username, args.password)
     except ValueError as exc:
-        console.print(f"[red]{exc}[/red]")
+        print_error(str(exc))
         sys.exit(1)
-    console.print(
-        f"[green]Admin '{admin.name}' created "
-        f"(username: {admin.username}, ID: {admin.person_id}).[/green]"
+    print_success(
+        f"Created {admin.name} (username: {admin.username}, ID: {admin.person_id}).",
+        role="admin",
     )
 
 
@@ -148,7 +163,7 @@ def cmd_create_tournament(args: argparse.Namespace) -> None:
     global _tournament
     _tournament = Tournament(name=args.name, tournament_id=args.id)
     _auto_save()
-    console.print(f"[green]Tournament '{args.name}' created (ID: {args.id}).[/green]")
+    print_success(f"Tournament '{args.name}' created (ID: {args.id}).", role="admin")
 
 
 def cmd_add_player(args: argparse.Namespace) -> None:
@@ -157,9 +172,9 @@ def cmd_add_player(args: argparse.Namespace) -> None:
     tournament = get_active_tournament()
     player = tournament.add_player(args.name, args.rating)
     _auto_save()
-    console.print(
-        f"[green]Added player {player.name} "
-        f"(ID: {player.person_id}, Rating: {player.rating}).[/green]"
+    print_success(
+        f"Added {player.name} (ID: {player.person_id}, Rating: {player.rating}).",
+        role="admin",
     )
 
 
@@ -168,12 +183,12 @@ def cmd_list_players(args: argparse.Namespace) -> None:
     require_admin()
     tournament = get_active_tournament()
     if not tournament.players:
-        console.print("[yellow]No players registered yet.[/yellow]")
+        print_warning("No players registered yet.")
         return
 
-    table = Table(title="Registered Players")
-    table.add_column("ID", style="cyan")
-    table.add_column("Name")
+    table = make_table("Registered Players", role="admin")
+    table.add_column("ID", style=id_column_style("admin"))
+    table.add_column("Name", style=ADMIN_HEADER)
     table.add_column("Rating", justify="right")
     table.add_column("Points", justify="right")
 
@@ -190,14 +205,14 @@ def cmd_pair_round(args: argparse.Namespace) -> None:
     try:
         matches = generate_pairings(tournament)
     except ValueError as exc:
-        console.print(f"[red]{exc}[/red]")
+        print_error(str(exc))
         sys.exit(1)
 
     if not matches:
-        console.print("[yellow]No pairings could be generated.[/yellow]")
+        print_warning("No pairings could be generated.")
         return
 
-    _print_pairings_table(tournament, tournament.current_round)
+    _print_pairings_table(tournament, tournament.current_round, role="admin")
     _auto_save()
 
 
@@ -207,21 +222,21 @@ def cmd_enter_result(args: argparse.Namespace) -> None:
     tournament = get_active_tournament()
     match = next((m for m in tournament.matches if m.match_id == args.match_id), None)
     if match is None:
-        console.print(f"[red]Match '{args.match_id}' not found.[/red]")
+        print_error(f"Match '{args.match_id}' not found.")
         sys.exit(1)
     if match.is_complete:
-        console.print(f"[red]Match '{args.match_id}' already has a result.[/red]")
+        print_error(f"Match '{args.match_id}' already has a result.")
         sys.exit(1)
 
     result = args.result.lower()
     if result not in ("win", "loss", "draw"):
-        console.print("[red]Result must be win, loss, or draw.[/red]")
+        print_error("Result must be win, loss, or draw.")
         sys.exit(1)
 
     white = tournament.get_player(match.player1_id)
     black = tournament.get_player(match.player2_id)
     if white is None or black is None:
-        console.print("[red]One or both players not found for this match.[/red]")
+        print_error("One or both players not found for this match.")
         sys.exit(1)
 
     if result == "win":
@@ -236,9 +251,10 @@ def cmd_enter_result(args: argparse.Namespace) -> None:
 
     match.result = result
     _auto_save()
-    console.print(
-        f"[green]Result recorded for {match.match_id}: "
-        f"{white.name} vs {black.name} -> {result} (white's perspective).[/green]"
+    print_success(
+        f"Result recorded for {match.match_id}: "
+        f"{white.name} vs {black.name} -> {result} (white's perspective).",
+        role="admin",
     )
 
 
@@ -248,7 +264,7 @@ def cmd_save(args: argparse.Namespace) -> None:
     tournament = get_active_tournament()
     path = Path(args.file) if args.file else DEFAULT_DATA_PATH
     save_tournament(tournament, path)
-    console.print(f"[green]Tournament saved to {path}.[/green]")
+    print_success(f"Tournament saved to {path}.", role="admin")
 
 
 def cmd_load(args: argparse.Namespace) -> None:
@@ -259,28 +275,31 @@ def cmd_load(args: argparse.Namespace) -> None:
     try:
         loaded = load_tournament(path)
     except ValueError as exc:
-        console.print(f"[red]{exc}[/red]")
+        print_error(str(exc))
         sys.exit(1)
 
     if loaded is None:
-        console.print(f"[red]No tournament file found at {path}.[/red]")
+        print_error(f"No tournament file found at {path}.")
         sys.exit(1)
 
     _tournament = loaded
-    console.print(f"[green]Tournament '{loaded.name}' loaded from {path}.[/green]")
+    print_success(f"Tournament '{loaded.name}' loaded from {path}.", role="admin")
 
 
-def _print_pairings_table(tournament: Tournament, round_num: int) -> None:
-    """Display pairings for a round in a table."""
+def _print_pairings_table(tournament: Tournament, round_num: int, role: str | None = None) -> None:
+    """Display pairings for a round in a role-colored table."""
     matches = tournament.get_round_matches(round_num)
     if not matches:
-        console.print(f"[yellow]No pairings for round {round_num}.[/yellow]")
+        print_warning(f"No pairings for round {round_num}.")
         return
 
-    table = Table(title=f"Round {round_num} Pairings")
-    table.add_column("Match ID", style="cyan")
-    table.add_column("White")
-    table.add_column("Black")
+    resolved_role = role or ("admin" if is_admin() else "player" if is_player() else None)
+    header = ADMIN_HEADER if resolved_role == "admin" else PLAYER_HEADER
+
+    table = make_table(f"Round {round_num} Pairings", role=resolved_role)
+    table.add_column("Match ID", style=id_column_style(resolved_role))
+    table.add_column("White", style=header)
+    table.add_column("Black", style=header)
     table.add_column("Result")
 
     for match in matches:
@@ -303,7 +322,7 @@ def cmd_view_pairings(args: argparse.Namespace) -> None:
     round_num = args.round if args.round else tournament.current_round
 
     if round_num < 1:
-        console.print("[yellow]No rounds have been paired yet.[/yellow]")
+        print_warning("No rounds have been paired yet.")
         return
 
     _print_pairings_table(tournament, round_num)
@@ -315,18 +334,25 @@ def cmd_standings(args: argparse.Namespace) -> None:
     tournament = get_active_tournament()
     standings = get_standings(tournament)
 
-    table = Table(title=f"Standings — {tournament.name}")
+    role = "admin" if is_admin() else "player"
+    header = ADMIN_HEADER if role == "admin" else PLAYER_HEADER
+
+    table = make_table(f"Standings — {tournament.name}", role=role)
     table.add_column("Rank", justify="right", style="bold")
-    table.add_column("ID", style="cyan")
-    table.add_column("Name")
+    table.add_column("ID", style=id_column_style(role))
+    table.add_column("Name", style=header)
     table.add_column("Rating", justify="right")
     table.add_column("Points", justify="right")
 
+    player_id = get_logged_in_player_id()
     for rank, player in enumerate(standings, start=1):
+        name = player.name
+        if role == "player" and player.person_id == player_id:
+            name = f"[{PLAYER_HEADER}]{player.name} (you)[/{PLAYER_HEADER}]"
         table.add_row(
             str(rank),
             player.person_id,
-            player.name,
+            name,
             str(player.rating),
             f"{player.points:.1f}",
         )
@@ -342,7 +368,7 @@ def cmd_my_points(args: argparse.Namespace) -> None:
     player = tournament.get_player(player_id)
 
     if player is None:
-        console.print("[red]Your player record was not found in this tournament.[/red]")
+        print_error("Your player record was not found in this tournament.")
         sys.exit(1)
 
     standings = get_standings(tournament)
@@ -351,11 +377,11 @@ def cmd_my_points(args: argparse.Namespace) -> None:
         None,
     )
 
-    console.print(f"[bold]Player:[/bold] {player.name} ({player.person_id})")
-    console.print(f"[bold]Rating:[/bold] {player.rating}")
-    console.print(f"[bold]Points:[/bold] {player.points:.1f}")
+    console.print(f"[{PLAYER_HEADER}]Player:[/{PLAYER_HEADER}] {player.name} ({player.person_id})")
+    console.print(f"[{PLAYER_HEADER}]Rating:[/{PLAYER_HEADER}] {player.rating}")
+    console.print(f"[{PLAYER_HEADER}]Points:[/{PLAYER_HEADER}] {player.points:.1f}")
     if rank is not None:
-        console.print(f"[bold]Rank:[/bold] {rank} of {len(standings)}")
+        console.print(f"[{PLAYER_HEADER}]Rank:[/{PLAYER_HEADER}] {rank} of {len(standings)}")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -441,14 +467,15 @@ def main() -> None:
             if args.username and not args.password:
                 args.player_id = args.username
             else:
-                console.print("[red]Player login requires a player ID: login player P001[/red]")
+                print_error("Player login requires a player ID: login player P001")
                 sys.exit(1)
 
     if args.command == "login" and args.role == "admin":
         if not args.username or not args.password:
-            console.print(
-                f"[red]Admin login requires username and password.[/red]\n"
-                f"[dim]Default: {DEFAULT_ADMIN_USERNAME} / {DEFAULT_ADMIN_PASSWORD}[/dim]"
+            print_error("Admin login requires username and password.")
+            print_info(
+                f"Default: {DEFAULT_ADMIN_USERNAME} / {DEFAULT_ADMIN_PASSWORD}",
+                role="admin",
             )
             sys.exit(1)
 

@@ -1,6 +1,5 @@
-"""Tournament player model."""
-
 from models.person import Person
+"""Player model."""
 
 
 class Player(Person):
