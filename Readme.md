@@ -1,6 +1,6 @@
 # Chess Tournament Manager CLI
 
-A Python command-line application for managing chess tournaments. Admins can register players, create pairings, record results, and generate standings. Players can log in to view pairings, standings, and their own points.
+A Python command-line application for managing chess tournaments. Admins can create multiple tournaments, register players, generate pairings, record results, and produce standings. Players can browse available tournaments, select one, and view pairings, standings, and their own points.
 
 ---
 
@@ -76,8 +76,8 @@ The CLI uses role-based access. You must log in before using most commands.
 
 | Role   | Access |
 |--------|--------|
-| Admin  | Full tournament management (create, add players, pairings, results, save/load) |
-| Player | Read-only views (pairings, standings, own points) |
+| Admin  | Create/manage tournaments, players, pairings, results, save/load |
+| Player | List tournaments, select a tournament, view pairings/standings/points |
 
 ### Default admin (created on first run)
 
@@ -92,14 +92,6 @@ python main.py whoami
 python main.py logout
 ```
 
-### Player login
-
-Players log in with the ID assigned when the admin registered them (e.g. `P001`):
-
-```powershell
-python main.py login player P001
-```
-
 ### Create a new admin
 
 An existing admin must be logged in:
@@ -111,6 +103,49 @@ python main.py create-admin "Jane Doe" jane mypassword123
 
 ---
 
+## Multiple tournaments
+
+The app supports **more than one tournament** at a time. Each tournament is stored as its own JSON file. You must know which tournament is active before running player or management commands.
+
+### How it works
+
+1. **`list-tournaments`** — shows every saved tournament and marks the currently selected one.
+2. **`select-tournament <id>`** — switches the active tournament (admin and player).
+3. All other commands (add player, pairings, standings, etc.) apply to the **selected** tournament.
+
+Tournament files live in `data/tournaments/` (e.g. `T001.json`, `T002.json`). The selected tournament ID is stored in `data/active_tournament.json`.
+
+### Admin — multiple tournaments
+
+```powershell
+python main.py login admin admin admin123
+
+python main.py create-tournament "Spring Open" T001
+python main.py create-tournament "Winter Cup" T002
+
+python main.py list-tournaments
+python main.py select-tournament T001
+python main.py add-player Alice 1500
+
+python main.py select-tournament T002
+python main.py add-player Bob 1400
+```
+
+### Player — choose a tournament to view
+
+Players must select a tournament before logging in (or pass `--tournament` at login):
+
+```powershell
+python main.py list-tournaments
+python main.py select-tournament T001
+python main.py login player P001
+
+# Alternative: login and select in one step
+python main.py login player P001 --tournament T001
+```
+
+---
+
 ## Commands
 
 ### Authentication
@@ -118,43 +153,43 @@ python main.py create-admin "Jane Doe" jane mypassword123
 | Command | Description |
 |---------|-------------|
 | `login admin <username> <password>` | Log in as admin |
-| `login player <player_id> [--tournament ID]` | Log in as player (select tournament first, or pass `--tournament`) |
+| `login player <player_id> [--tournament ID]` | Log in as player (select tournament first or use `--tournament`) |
 | `logout` | End the current session |
-| `whoami` | Show the logged-in user and role |
+| `whoami` | Show logged-in user, role, and active tournament |
 | `create-admin <name> <username> <password>` | Create a new admin account (admin only) |
 
 ### Tournaments (admin & player)
 
 | Command | Description |
 |---------|-------------|
-| `list-tournaments` | List all saved tournaments (marks the selected one) |
-| `select-tournament <id>` | Switch to another tournament |
+| `list-tournaments` | List all saved tournaments; marks the selected one |
+| `select-tournament <id>` | Switch to a different tournament |
 
 ### Admin — tournament management
 
 | Command | Description |
 |---------|-------------|
-| `create-tournament <name> <id>` | Create a new tournament |
-| `add-player <name> <rating>` | Register a player (assigns ID like P001) |
-| `list-players` | List all players with rating and points |
+| `create-tournament <name> <id>` | Create a new tournament and select it |
+| `add-player <name> <rating>` | Register a player in the active tournament (ID like P001) |
+| `list-players` | List all players in the active tournament |
 | `pair-round` | Generate pairings for the next round |
 | `enter-result <match_id> <result>` | Record result: `win`, `loss`, or `draw` (White's perspective) |
-| `save [--file path]` | Save tournament to JSON (default: `data/tournament.json`) |
-| `load [--file path]` | Load tournament from JSON |
+| `save [--file path]` | Save active tournament (default: `data/tournaments/<id>.json`) |
+| `load [--file path]` | Import a tournament from JSON and select it |
 
 ### Admin & player — read-only views
 
 | Command | Description |
 |---------|-------------|
 | `view-pairings [--round N]` | View pairings for a round (default: current round) |
-| `standings` | View the leaderboard sorted by points, then rating |
+| `standings` | View the leaderboard (points, then rating tiebreak) |
 | `my-points` | View your own points and rank (player only) |
 
 ---
 
 ## Quick command reference
 
-Copy-paste examples for common tasks. Activate your virtual environment first:
+Activate your virtual environment first:
 
 ```powershell
 .\venv\Scripts\Activate.ps1
@@ -174,9 +209,6 @@ pip install -r requirements.txt
 python main.py login admin admin admin123
 python main.py whoami
 python main.py logout
-
-python main.py login player P001
-python main.py logout
 ```
 
 ### Create a new admin
@@ -184,22 +216,6 @@ python main.py logout
 ```powershell
 python main.py login admin admin admin123
 python main.py create-admin "Jane Doe" jane mypassword123
-```
-
-### Admin workflow
-
-```powershell
-python main.py login admin admin admin123
-python main.py create-tournament "Spring Open" T001
-python main.py add-player Alice 1500
-python main.py add-player Bob 1400
-python main.py list-players
-python main.py pair-round
-python main.py enter-result M001 win
-python main.py standings
-python main.py save
-python main.py load
-python main.py logout
 ```
 
 ### List and switch tournaments
@@ -210,13 +226,30 @@ python main.py select-tournament T001
 python main.py select-tournament T002
 ```
 
+### Admin workflow
+
+```powershell
+python main.py login admin admin admin123
+python main.py create-tournament "Spring Open" T001
+python main.py create-tournament "Winter Cup" T002
+python main.py list-tournaments
+python main.py select-tournament T001
+python main.py add-player Alice 1500
+python main.py add-player Bob 1400
+python main.py list-players
+python main.py pair-round
+python main.py enter-result M001 win
+python main.py standings
+python main.py save
+python main.py logout
+```
+
 ### Player workflow
 
 ```powershell
 python main.py list-tournaments
 python main.py select-tournament T001
 python main.py login player P001
-# or: python main.py login player P001 --tournament T001
 python main.py view-pairings
 python main.py view-pairings --round 1
 python main.py standings
@@ -227,11 +260,14 @@ python main.py logout
 ### Individual commands
 
 ```powershell
-# Tournament
+# Tournaments
+python main.py list-tournaments
+python main.py select-tournament T001
 python main.py create-tournament "Spring Open" T001
+
+# Save / load
 python main.py save
 python main.py save --file data/backup.json
-python main.py load
 python main.py load --file data/backup.json
 
 # Players
@@ -244,16 +280,21 @@ python main.py enter-result M001 win
 python main.py enter-result M001 loss
 python main.py enter-result M001 draw
 
-# Standings & pairings
+# Views
 python main.py standings
 python main.py view-pairings
 python main.py my-points
+
+# Player login with tournament flag
+python main.py login player P001 --tournament T001
 ```
 
 ### Run tests
 
 ```powershell
 pytest tests/ -v
+# or
+pipenv run test
 ```
 
 ---
@@ -267,21 +308,25 @@ The CLI uses [rich](https://github.com/Textualize/rich) for formatted tables and
 | Admin  | Green |
 | Player | White |
 
+Success messages, table borders, and badges use the logged-in role's color.
+
 ---
 
 ## Data persistence
 
 All data is stored as JSON in the `data/` folder:
 
-| File | Contents |
-|------|----------|
-| `data/tournaments/*.json` | One file per tournament (e.g. `T001.json`) |
-| `data/active_tournament.json` | Currently selected tournament ID |
-| `data/tournament.json` | Legacy single-tournament file (auto-migrated) |
+| File / folder | Contents |
+|---------------|----------|
+| `data/tournaments/*.json` | One file per tournament (e.g. `T001.json`, `T002.json`) |
+| `data/active_tournament.json` | ID of the currently selected tournament |
 | `data/admins.json` | Admin accounts (passwords stored as SHA-256 hashes) |
-| `data/session.json` | Current login session |
+| `data/session.json` | Current login session (role, player ID, tournament ID) |
+| `data/tournament.json` | Legacy single-tournament file (auto-migrated on first run) |
 
-Tournament data auto-saves after admin changes (create, add player, pair round, enter result). The tournament auto-loads on startup for most commands.
+- Tournament data **auto-saves** after admin changes (create, add player, pair round, enter result).
+- The **selected tournament auto-loads** on startup for most commands.
+- Creating a tournament with a duplicate ID is blocked.
 
 ---
 
@@ -298,15 +343,20 @@ chess-manager-cli-python/
 │   └── match.py         # Match between two players
 ├── utils/
 │   ├── auth.py          # Login, sessions, role checks
-│   ├── persistence.py   # JSON save/load
+│   ├── persistence.py   # Multi-tournament JSON save/load
 │   ├── pairing.py       # Round pairing logic
 │   ├── standings.py     # Leaderboard sorting
 │   └── console_theme.py # Role-based rich colors
-├── data/                # JSON storage (auto-created)
-├── tests/               # pytest test suite
+├── data/
+│   ├── tournaments/     # One JSON file per tournament
+│   ├── active_tournament.json
+│   ├── admins.json
+│   └── session.json
+├── tests/               # pytest test suite (39 tests)
 ├── Pipfile              # Pipenv dependencies
 ├── Pipfile.lock         # Locked dependency versions
 ├── requirements.txt     # pip freeze output
+├── commands.md          # Quick command cheat sheet
 └── Readme.md
 ```
 
@@ -349,7 +399,7 @@ chess-manager-cli-python/
 
 ## Testing
 
-The project includes **37 unit tests** covering models, pairing, standings, persistence, auth, CLI commands, and console theming.
+The project includes **39 unit tests** covering models, pairing, standings, persistence, auth, CLI commands, console theming, and multi-tournament support.
 
 ```powershell
 # Using venv
@@ -366,9 +416,9 @@ pipenv run test
 | `test_player.py` | Point updates after win/draw/loss |
 | `test_pairing.py` | Round 1 by rating, later rounds by points |
 | `test_standings.py` | Leaderboard sort and tiebreak |
-| `test_persistence.py` | JSON save/load and error handling |
+| `test_persistence.py` | JSON save/load, multi-tournament list and selection |
 | `test_auth.py` | Admin/player login and password hashing |
-| `test_main_cli.py` | argparse parser and command handlers |
+| `test_main_cli.py` | argparse parser, command handlers, tournament switching |
 | `test_console_theme.py` | Role-based rich output |
 
 ---
@@ -384,11 +434,13 @@ Managed via `Pipfile` (Pipenv) and `requirements.txt` (pip).
 
 ---
 
-## MVP features
+## Features
 
-- Player registration with unique IDs
+- Multiple tournaments with list and select
+- Player registration with unique IDs per tournament
 - Swiss-style pairing system
 - Match result entry with automatic point updates
 - Standings generation with rating tiebreak
 - JSON persistence with safe load/save
 - Admin and player login with role-based access
+- Role-colored CLI output (green admin, white player)
