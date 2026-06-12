@@ -1,3 +1,13 @@
+Metadata-Version: 2.4
+Name: chess-manager-cli
+Version: 1.0.0
+Summary: Chess Tournament Manager CLI
+Requires-Python: >=3.14
+Description-Content-Type: text/markdown
+Requires-Dist: rich>=15.0.0
+Provides-Extra: dev
+Requires-Dist: pytest>=9.0.0; extra == "dev"
+
 # Chess Tournament Manager CLI
 
 A Python command-line application for managing chess tournaments. Admins can create multiple tournaments, register players, generate pairings, record results, and produce standings. Players can browse available tournaments, select one, and view pairings, standings, and their own points.
@@ -16,7 +26,7 @@ A Python command-line application for managing chess tournaments. Admins can cre
 
 Choose **one** of the following methods to install dependencies.
 
-### Option A — venv + pip
+### Option A — venv + pip (recommended for beginners)
 
 ```powershell
 # 1. Clone or navigate to the project folder
@@ -29,12 +39,11 @@ python -m venv venv
 .\venv\Scripts\Activate.ps1        # Windows PowerShell
 # source venv/bin/activate         # macOS / Linux
 
-# 4. Install dependencies and the short `chess` command
+# 4. Install dependencies
 pip install -r requirements.txt
-pip install -e .
 
 # 5. Verify installation
-chess whoami
+python main.py whoami
 pytest tests/ -v
 ```
 
@@ -46,11 +55,10 @@ cd chess-manager-cli-python
 
 # 2. Install dependencies from Pipfile (creates virtualenv automatically)
 pipenv install --dev
-pipenv run pip install -e .
 
 # 3. Run commands inside the Pipenv shell
 pipenv shell
-chess whoami
+python main.py whoami
 pipenv run test
 ```
 
@@ -58,38 +66,16 @@ pipenv run test
 
 ## Running the Application
 
-Use the short **`chess`** command instead of typing `python main.py` every time.
-
-### Option 1 — `chess` command (recommended)
-
-After setup, run `pip install -e .` once. Then from anywhere (with venv active):
+All commands are run from the project root:
 
 ```powershell
-chess login admin admin admin123
-chess list-tournaments
-chess select-tournament T001
-chess standings
-```
-
-### Option 2 — Launcher scripts (no install needed)
-
-From the project folder:
-
-```powershell
-.\chess login admin admin admin123     # PowerShell
-.\chess.bat login admin admin admin123 # Command Prompt
-```
-
-### Option 3 — Full command (always works)
-
-```powershell
-chess <command> [arguments]
+python main.py <command> [arguments]
 ```
 
 With Pipenv:
 
 ```powershell
-pipenv run chess <command> [arguments]
+pipenv run python main.py <command> [arguments]
 ```
 
 ---
@@ -111,9 +97,9 @@ The CLI uses role-based access. You must log in before using most commands.
 | Password | `admin123` |
 
 ```powershell
-chess login admin admin admin123
-chess whoami
-chess logout
+python main.py login admin admin admin123
+python main.py whoami
+python main.py logout
 ```
 
 ### Create a new admin
@@ -121,8 +107,8 @@ chess logout
 An existing admin must be logged in:
 
 ```powershell
-chess login admin admin admin123
-chess create-admin "Jane Doe" jane mypassword123
+python main.py login admin admin admin123
+python main.py create-admin "Jane Doe" jane mypassword123
 ```
 
 ---
@@ -142,17 +128,17 @@ Tournament files live in `data/tournaments/` (e.g. `T001.json`, `T002.json`). Th
 ### Admin — multiple tournaments
 
 ```powershell
-chess login admin admin admin123
+python main.py login admin admin admin123
 
-chess create-tournament "Spring Open" T001
-chess create-tournament "Winter Cup" T002
+python main.py create-tournament "Spring Open" T001
+python main.py create-tournament "Winter Cup" T002
 
-chess list-tournaments
-chess select-tournament T001
-chess add-player Alice 1500
+python main.py list-tournaments
+python main.py select-tournament T001
+python main.py add-player Alice 1500
 
-chess select-tournament T002
-chess add-player Bob 1400
+python main.py select-tournament T002
+python main.py add-player Bob 1400
 ```
 
 ### Player — choose a tournament to view
@@ -160,12 +146,12 @@ chess add-player Bob 1400
 Players must select a tournament before logging in (or pass `--tournament` at login):
 
 ```powershell
-chess list-tournaments
-chess select-tournament T001
-chess login player P001
+python main.py list-tournaments
+python main.py select-tournament T001
+python main.py login player P001
 
 # Alternative: login and select in one step
-chess login player P001 --tournament T001
+python main.py login player P001 --tournament T001
 ```
 
 ---
@@ -230,87 +216,87 @@ pip install -r requirements.txt
 ### Authentication
 
 ```powershell
-chess login admin admin admin123
-chess whoami
-chess logout
+python main.py login admin admin admin123
+python main.py whoami
+python main.py logout
 ```
 
 ### Create a new admin
 
 ```powershell
-chess login admin admin admin123
-chess create-admin "Jane Doe" jane mypassword123
+python main.py login admin admin admin123
+python main.py create-admin "Jane Doe" jane mypassword123
 ```
 
 ### List and switch tournaments
 
 ```powershell
-chess list-tournaments
-chess select-tournament T001
-chess select-tournament T002
+python main.py list-tournaments
+python main.py select-tournament T001
+python main.py select-tournament T002
 ```
 
 ### Admin workflow
 
 ```powershell
-chess login admin admin admin123
-chess create-tournament "Spring Open" T001
-chess create-tournament "Winter Cup" T002
-chess list-tournaments
-chess select-tournament T001
-chess add-player Alice 1500
-chess add-player Bob 1400
-chess list-players
-chess pair-round
-chess enter-result M001 win
-chess standings
-chess save
-chess logout
+python main.py login admin admin admin123
+python main.py create-tournament "Spring Open" T001
+python main.py create-tournament "Winter Cup" T002
+python main.py list-tournaments
+python main.py select-tournament T001
+python main.py add-player Alice 1500
+python main.py add-player Bob 1400
+python main.py list-players
+python main.py pair-round
+python main.py enter-result M001 win
+python main.py standings
+python main.py save
+python main.py logout
 ```
 
 ### Player workflow
 
 ```powershell
-chess list-tournaments
-chess select-tournament T001
-chess login player P001
-chess view-pairings
-chess view-pairings --round 1
-chess standings
-chess my-points
-chess logout
+python main.py list-tournaments
+python main.py select-tournament T001
+python main.py login player P001
+python main.py view-pairings
+python main.py view-pairings --round 1
+python main.py standings
+python main.py my-points
+python main.py logout
 ```
 
 ### Individual commands
 
 ```powershell
 # Tournaments
-chess list-tournaments
-chess select-tournament T001
-chess create-tournament "Spring Open" T001
+python main.py list-tournaments
+python main.py select-tournament T001
+python main.py create-tournament "Spring Open" T001
 
 # Save / load
-chess save
-chess save --file data/backup.json
-chess load --file data/backup.json
+python main.py save
+python main.py save --file data/backup.json
+python main.py load --file data/backup.json
 
 # Players
-chess add-player Alice 1500
-chess list-players
+python main.py add-player Alice 1500
+python main.py list-players
 
 # Rounds & results
-chess pair-round
-chess enter-result M001 win
-chess enter-result M001 loss
-chess enter-result M001 draw
+python main.py pair-round
+python main.py enter-result M001 win
+python main.py enter-result M001 loss
+python main.py enter-result M001 draw
 
 # Views
-chess standings
-chess view-pairings
-chess my-points
+python main.py standings
+python main.py view-pairings
+python main.py my-points
 
 # Player login with tournament flag
-chess login player P001 --tournament T001
+python main.py login player P001 --tournament T001
 ```
 
 ### Run tests
@@ -377,8 +363,6 @@ chess-manager-cli-python/
 │   ├── admins.json
 │   └── session.json
 ├── tests/               # pytest test suite (39 tests)
-├── pyproject.toml       # Package config; installs `chess` command
-├── chess.bat / chess.ps1 # Short launcher scripts (Windows)
 ├── Pipfile              # Pipenv dependencies
 ├── Pipfile.lock         # Locked dependency versions
 ├── requirements.txt     # pip freeze output

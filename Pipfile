@@ -13,5 +13,5 @@ pytest = ">=9.0.0"
 python_version = "3.14"
 
 [scripts]
-chess-cli = "python main.py"
+chess = "chess"
 test = "pytest tests/ -v"
