@@ -16,7 +16,7 @@ A Python command-line application for managing chess tournaments. Admins can cre
 
 Choose **one** of the following methods to install dependencies.
 
-### Option A — venv + pip (recommended for beginners)
+### Option A — venv + pip
 
 ```powershell
 # 1. Clone or navigate to the project folder
