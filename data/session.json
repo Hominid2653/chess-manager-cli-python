@@ -1,6 +1,5 @@
 {
-  "role": "admin",
-  "username": "admin",
-  "name": "Tournament Admin",
-  "person_id": "A001"
+  "role": "player",
+  "player_id": "P001",
+  "name": "Elias"
 }

@@ -115,16 +115,19 @@ def login_admin(username: str, password: str) -> Admin:
     return admin
 
 
-def login_player(player_id: str, tournament) -> None:
-    """Log in as a player using their tournament ID."""
+def login_player(player_id: str, tournament, tournament_id: str) -> None:
+    """Log in as a player for a specific tournament."""
     player = tournament.get_player(player_id)
     if player is None:
-        raise ValueError(f"Player '{player_id}' not found in the active tournament.")
+        raise ValueError(
+            f"Player '{player_id}' not found in tournament '{tournament_id}'."
+        )
 
     save_session({
         "role": "player",
         "player_id": player.person_id,
         "name": player.name,
+        "tournament_id": tournament_id,
     })
 
 
@@ -145,4 +148,12 @@ def get_logged_in_player_id() -> str | None:
     session = get_session()
     if session and session.get("role") == "player":
         return session.get("player_id")
+    return None
+
+
+def get_session_tournament_id() -> str | None:
+    """Return the tournament ID tied to the current player session."""
+    session = get_session()
+    if session:
+        return session.get("tournament_id")
     return None

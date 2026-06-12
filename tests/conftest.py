@@ -20,8 +20,28 @@ def isolate_auth_files(tmp_path: Path, monkeypatch):
 
 
 @pytest.fixture
-def tournament_file(tmp_path: Path, monkeypatch):
-    """Point tournament JSON to a temp file."""
-    path = tmp_path / "tournament.json"
-    monkeypatch.setattr("utils.persistence.DEFAULT_DATA_PATH", path)
-    return path
+def tournament_storage(tmp_path: Path, monkeypatch):
+    """Point tournament storage to a temp directory."""
+    tournaments_dir = tmp_path / "tournaments"
+    tournaments_dir.mkdir()
+    active_file = tmp_path / "active_tournament.json"
+    legacy_file = tmp_path / "tournament.json"
+
+    monkeypatch.setattr("utils.persistence.DATA_DIR", tmp_path)
+    monkeypatch.setattr("utils.persistence.TOURNAMENTS_DIR", tournaments_dir)
+    monkeypatch.setattr("utils.persistence.ACTIVE_TOURNAMENT_PATH", active_file)
+    monkeypatch.setattr("utils.persistence.LEGACY_TOURNAMENT_PATH", legacy_file)
+    monkeypatch.setattr("utils.persistence.DEFAULT_DATA_PATH", legacy_file)
+
+    return {
+        "dir": tmp_path,
+        "tournaments_dir": tournaments_dir,
+        "active_file": active_file,
+        "legacy_file": legacy_file,
+    }
+
+
+@pytest.fixture
+def tournament_file(tournament_storage):
+    """Backward-compatible fixture returning a legacy tournament path."""
+    return tournament_storage["legacy_file"]

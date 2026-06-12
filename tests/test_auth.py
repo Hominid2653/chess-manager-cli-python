@@ -38,10 +38,11 @@ def test_player_login():
     tournament = Tournament("Open", "T001")
     tournament.add_player("Alice", 1500)
 
-    login_player("P001", tournament)
+    login_player("P001", tournament, "T001")
 
     assert is_player()
     assert get_session()["player_id"] == "P001"
+    assert get_session()["tournament_id"] == "T001"
 
 
 def test_admin_password_hashing():

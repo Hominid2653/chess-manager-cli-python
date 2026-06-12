@@ -5,7 +5,18 @@ import sys
 from pathlib import Path
 
 from models.tournament import Tournament
-from utils.persistence import save_tournament, load_tournament, DEFAULT_DATA_PATH
+from utils.persistence import (
+    save_tournament,
+    load_tournament,
+    load_tournament_by_id,
+    load_tournament_from_path,
+    load_active_tournament,
+    list_tournament_summaries,
+    set_active_tournament_id,
+    get_active_tournament_id,
+    tournament_exists,
+    DEFAULT_DATA_PATH,
+)
 from utils.pairing import generate_pairings
 from utils.standings import get_standings
 from utils.auth import (
@@ -18,6 +29,7 @@ from utils.auth import (
     create_admin,
     ensure_default_admin,
     get_logged_in_player_id,
+    get_session_tournament_id,
     DEFAULT_ADMIN_USERNAME,
     DEFAULT_ADMIN_PASSWORD,
 )
@@ -38,27 +50,62 @@ _tournament: Tournament | None = None
 
 
 def _try_auto_load() -> None:
-    """Load tournament from JSON if not already in memory."""
+    """Load the selected tournament from JSON if not already in memory."""
     global _tournament
     if _tournament is None:
-        loaded = load_tournament()
+        loaded = load_active_tournament()
         if loaded is not None:
             _tournament = loaded
 
 
 def _auto_save() -> None:
-    """Save tournament to JSON after changes."""
+    """Save the active tournament to JSON after changes."""
     if _tournament is not None:
         save_tournament(_tournament)
 
 
+def _set_active_tournament(tournament: Tournament) -> None:
+    """Set the in-memory and persisted active tournament."""
+    global _tournament
+    _tournament = tournament
+    set_active_tournament_id(tournament.tournament_id)
+
+
 def get_active_tournament() -> Tournament:
-    """Return the active tournament or exit with an error."""
+    """Return the selected tournament or exit with an error."""
     global _tournament
     if _tournament is None:
-        print_error("No active tournament. Use create-tournament or load first.")
+        _try_auto_load()
+    if _tournament is None:
+        print_error(
+            "No tournament selected. Use list-tournaments, then select-tournament <id>."
+        )
         sys.exit(1)
     return _tournament
+
+
+def _resolve_tournament_for_player_login(tournament_id: str | None) -> tuple[Tournament, str]:
+    """Pick the tournament a player is logging into."""
+    if tournament_id:
+        if not tournament_exists(tournament_id):
+            print_error(f"Tournament '{tournament_id}' not found.")
+            sys.exit(1)
+        tournament = load_tournament_by_id(tournament_id)
+        if tournament is None:
+            print_error(f"Could not load tournament '{tournament_id}'.")
+            sys.exit(1)
+        _set_active_tournament(tournament)
+        return tournament, tournament_id
+
+    active_id = get_active_tournament_id()
+    if active_id is None:
+        print_error(
+            "Select a tournament first: list-tournaments, then select-tournament <id>."
+        )
+        sys.exit(1)
+
+    tournament = get_active_tournament()
+    return tournament, active_id
 
 
 def require_admin() -> None:
@@ -96,14 +143,17 @@ def cmd_login(args: argparse.Namespace) -> None:
         return
 
     if role == "player":
-        tournament = get_active_tournament()
+        tournament, tournament_id = _resolve_tournament_for_player_login(args.tournament_id)
         try:
-            login_player(args.player_id, tournament)
+            login_player(args.player_id, tournament, tournament_id)
         except ValueError as exc:
             print_error(str(exc))
             sys.exit(1)
         player = tournament.get_player(args.player_id)
-        print_success(f"{player.name} ({args.player_id}) logged in.", role="player")
+        print_success(
+            f"{player.name} ({args.player_id}) logged in to {tournament.name} ({tournament_id}).",
+            role="player",
+        )
         return
 
     print_error("Role must be 'admin' or 'player'.")
@@ -131,14 +181,19 @@ def cmd_whoami(args: argparse.Namespace) -> None:
         return
 
     name = session.get("name", "Unknown")
+    active_id = get_active_tournament_id()
+    active_label = f" | Tournament: {active_id}" if active_id else ""
+
     if session["role"] == "player":
+        tournament_id = session.get("tournament_id", active_id or "none")
         print_info(
-            f"{role_badge('player')}{name} (ID: {session.get('player_id')})",
+            f"{role_badge('player')}{name} (ID: {session.get('player_id')}) "
+            f"[{tournament_id}]{active_label}",
             role="player",
         )
     else:
         print_info(
-            f"{role_badge('admin')}{name} (@{session.get('username')})",
+            f"{role_badge('admin')}{name} (@{session.get('username')}){active_label}",
             role="admin",
         )
 
@@ -157,11 +212,68 @@ def cmd_create_admin(args: argparse.Namespace) -> None:
     )
 
 
+def cmd_list_tournaments(args: argparse.Namespace) -> None:
+    """List all saved tournaments."""
+    require_admin_or_player()
+    summaries = list_tournament_summaries()
+    active_id = get_active_tournament_id()
+    role = "admin" if is_admin() else "player"
+
+    if not summaries:
+        print_warning("No tournaments found. An admin can create one with create-tournament.")
+        return
+
+    table = make_table("Tournaments", role=role)
+    table.add_column("ID", style=id_column_style(role))
+    table.add_column("Name", style=ADMIN_HEADER if role == "admin" else PLAYER_HEADER)
+    table.add_column("Players", justify="right")
+    table.add_column("Round", justify="right")
+    table.add_column("Selected", justify="center")
+
+    for item in summaries:
+        selected = "yes" if item["tournament_id"] == active_id else ""
+        table.add_row(
+            item["tournament_id"],
+            item["name"],
+            str(item["player_count"]),
+            str(item["current_round"]),
+            selected,
+        )
+
+    console.print(table)
+
+
+def cmd_select_tournament(args: argparse.Namespace) -> None:
+    """Select which tournament to work with."""
+    require_admin_or_player()
+    tournament_id = args.tournament_id
+
+    if not tournament_exists(tournament_id):
+        print_error(f"Tournament '{tournament_id}' not found. Use list-tournaments.")
+        sys.exit(1)
+
+    tournament = load_tournament_by_id(tournament_id)
+    if tournament is None:
+        print_error(f"Could not load tournament '{tournament_id}'.")
+        sys.exit(1)
+
+    _set_active_tournament(tournament)
+    role = "admin" if is_admin() else "player"
+    print_success(
+        f"Selected '{tournament.name}' ({tournament_id}).",
+        role=role,
+    )
+
+
 def cmd_create_tournament(args: argparse.Namespace) -> None:
     """Create a new tournament."""
     require_admin()
-    global _tournament
-    _tournament = Tournament(name=args.name, tournament_id=args.id)
+    if tournament_exists(args.id):
+        print_error(f"Tournament ID '{args.id}' already exists. Choose another ID.")
+        sys.exit(1)
+
+    tournament = Tournament(name=args.name, tournament_id=args.id)
+    _set_active_tournament(tournament)
     _auto_save()
     print_success(f"Tournament '{args.name}' created (ID: {args.id}).", role="admin")
 
@@ -262,18 +374,18 @@ def cmd_save(args: argparse.Namespace) -> None:
     """Save the tournament to a JSON file."""
     require_admin()
     tournament = get_active_tournament()
-    path = Path(args.file) if args.file else DEFAULT_DATA_PATH
+    path = Path(args.file) if args.file else None
     save_tournament(tournament, path)
-    print_success(f"Tournament saved to {path}.", role="admin")
+    saved_to = path or f"data/tournaments/{tournament.tournament_id}.json"
+    print_success(f"Tournament saved to {saved_to}.", role="admin")
 
 
 def cmd_load(args: argparse.Namespace) -> None:
-    """Load a tournament from a JSON file."""
+    """Load a tournament from a JSON file and select it."""
     require_admin()
-    global _tournament
     path = Path(args.file) if args.file else DEFAULT_DATA_PATH
     try:
-        loaded = load_tournament(path)
+        loaded = load_tournament_from_path(path)
     except ValueError as exc:
         print_error(str(exc))
         sys.exit(1)
@@ -282,8 +394,12 @@ def cmd_load(args: argparse.Namespace) -> None:
         print_error(f"No tournament file found at {path}.")
         sys.exit(1)
 
-    _tournament = loaded
-    print_success(f"Tournament '{loaded.name}' loaded from {path}.", role="admin")
+    save_tournament(loaded)
+    _set_active_tournament(loaded)
+    print_success(
+        f"Tournament '{loaded.name}' ({loaded.tournament_id}) loaded and selected.",
+        role="admin",
+    )
 
 
 def _print_pairings_table(tournament: Tournament, round_num: int, role: str | None = None) -> None:
@@ -365,6 +481,15 @@ def cmd_my_points(args: argparse.Namespace) -> None:
     require_player()
     tournament = get_active_tournament()
     player_id = get_logged_in_player_id()
+    session_tournament_id = get_session_tournament_id()
+
+    if session_tournament_id and tournament.tournament_id != session_tournament_id:
+        print_error(
+            f"You are logged in for '{session_tournament_id}'. "
+            f"Run select-tournament {session_tournament_id} first."
+        )
+        sys.exit(1)
+
     player = tournament.get_player(player_id)
 
     if player is None:
@@ -396,7 +521,21 @@ def build_parser() -> argparse.ArgumentParser:
     login_parser.add_argument("username", nargs="?", help="Admin username (admin login)")
     login_parser.add_argument("password", nargs="?", help="Admin password (admin login)")
     login_parser.add_argument("--player-id", "-p", dest="player_id", help="Player ID (player login)")
+    login_parser.add_argument(
+        "--tournament", "-t", dest="tournament_id", help="Tournament ID (player login)"
+    )
     login_parser.set_defaults(func=cmd_login)
+
+    list_tournaments_parser = subparsers.add_parser(
+        "list-tournaments", help="List all saved tournaments"
+    )
+    list_tournaments_parser.set_defaults(func=cmd_list_tournaments)
+
+    select_tournament_parser = subparsers.add_parser(
+        "select-tournament", help="Select a tournament to work with"
+    )
+    select_tournament_parser.add_argument("tournament_id", help="Tournament ID")
+    select_tournament_parser.set_defaults(func=cmd_select_tournament)
 
     logout_parser = subparsers.add_parser("logout", help="Log out of the current session")
     logout_parser.set_defaults(func=cmd_logout)
@@ -479,7 +618,7 @@ def main() -> None:
             )
             sys.exit(1)
 
-    if args.command != "create-tournament":
+    if args.command not in ("create-tournament", "list-tournaments"):
         _try_auto_load()
 
     args.func(args)

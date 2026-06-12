@@ -87,5 +87,5 @@ def test_resolve_role_from_session(monkeypatch):
 
     tournament = Tournament("Open", "T001")
     tournament.add_player("Alice", 1500)
-    login_player("P001", tournament)
+    login_player("P001", tournament, "T001")
     assert theme._resolve_role() == "player"
