@@ -1,6 +1,6 @@
 # Quick command reference
 
-See [Readme.md](Readme.md) for full setup and documentation.
+Use `chess` instead of `python main.py`. See [Readme.md](Readme.md) for full setup.
 
 ## Setup
 
@@ -8,49 +8,56 @@ See [Readme.md](Readme.md) for full setup and documentation.
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+pip install -e .
 ```
 
 ## Admin workflow
 
 ```powershell
-python main.py login admin admin admin123
-python main.py create-tournament "Spring Open" T001
-python main.py add-player Alice 1500
-python main.py add-player Bob 1400
-python main.py pair-round
-python main.py enter-result M001 win
-python main.py standings
-python main.py logout
+chess login admin admin admin123
+chess create-tournament "Spring Open" T001
+chess add-player Alice 1500
+chess add-player Bob 1400
+chess pair-round
+chess enter-result M001 win
+chess standings
+chess logout
 ```
 
 ## List and switch tournaments
 
 ```powershell
-python main.py list-tournaments
-python main.py select-tournament T001
+chess list-tournaments
+chess select-tournament T001
 ```
 
 ## Player workflow
 
 ```powershell
-python main.py list-tournaments
-python main.py select-tournament T001
-python main.py login player P001
-python main.py view-pairings
-python main.py standings
-python main.py my-points
-python main.py logout
+chess list-tournaments
+chess select-tournament T001
+chess login player P001
+chess view-pairings
+chess standings
+chess my-points
+chess logout
 ```
 
 ## Create new admin
 
 ```powershell
-python main.py login admin admin admin123
-python main.py create-admin "Jane Doe" jane mypassword123
+chess login admin admin admin123
+chess create-admin "Jane Doe" jane mypassword123
 ```
 
 ## Run tests
 
 ```powershell
 pytest tests/ -v
+```
+
+## Without install (use launcher)
+
+```powershell
+.\chess login admin admin admin123
 ```
